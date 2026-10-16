@@ -1,0 +1,22 @@
+services:
+  isponsorblocktv-web:
+    image: ghcr.io/dongbo501/isponsorblocktv-web:latest
+    container_name: isponsorblocktv-web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - isponsorblocktv-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  isponsorblocktv-data:
+    name: isponsorblocktv-web-data

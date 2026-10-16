@@ -1,0 +1,3 @@
+# Preserve the upstream snapshot byte for byte, including its original CRLF file.
+vendor/upstream/** -text -whitespace
+*.jpg binary

@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/dmunozv04/iSponsorBlockTV",
+  "version": "2.11.0",
+  "commit": "005d248d20dd529bd3e8dca4d17a65ab05135ce8",
+  "license": "GPL-3.0",
+  "vendored_directory": "vendor/upstream"
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#102d2c" />
+    <meta
+      name="description"
+      content="iSponsorBlockTV 中文管理面板，轻松管理电视上的 YouTube 观看体验。"
+    />
+    <title>iSponsorBlockTV · 中文管理面板</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <div id="boot" class="boot">正在连接管理面板…</div>
+    <div id="auth" class="auth-shell" hidden></div>
+    <div id="shell" class="shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#overview"
+          ><span class="brand-icon">▶</span
+          ><span
+            >iSponsorBlock<span class="brand-sub">TV · 中文管理面板</span></span
+          ></a
+        >
+        <div class="nav-caption">工作空间</div>
+        <nav id="nav" aria-label="主导航"></nav>
+        <div class="sidebar-bottom">
+          <div class="local-note">
+            <span class="dot"></span> 自托管 · 数据保存在本机
+          </div>
+          <a
+            href="https://github.com/dongbo501/isponsorblocktv-web"
+            target="_blank"
+            rel="noopener noreferrer"
+            >项目文档 <span>↗</span></a
+          >
+          <button id="logout" class="quiet sidebar-logout">退出登录</button>
+        </div>
+      </aside>
+      <main>
+        <header class="topbar">
+          <span
+            >控制台 <span class="crumb">/</span>
+            <span id="breadcrumb">总览</span></span
+          >
+          <div class="topbar-right">
+            <span id="top-status" class="badge">连接中</span
+            ><span class="avatar" title="管理员">管</span>
+          </div>
+        </header>
+        <div class="workspace">
+          <div id="page"></div>
+          <footer>
+            iSponsorBlockTV Web <span id="footer-version"></span
+            ><span>基于 SponsorBlock 社区数据 · GPL-3.0 开源</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+    <dialog id="modal"><div id="modal-content"></div></dialog>
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
