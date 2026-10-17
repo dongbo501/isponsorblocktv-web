@@ -17,6 +17,7 @@ const paths = {
   heart:
     "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z",
   logs: "M5 3h14v18H5z M9 7h6 M9 11h6 M9 15h3",
+  chart: "M4 3v18h17 M8 16v-5 M13 16V6 M18 16V9",
   settings:
     "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M5.6 18.4l2.1-2.1 M16.3 7.7l2.1-2.1 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
   plus: "M12 5v14 M5 12h14",
@@ -33,6 +34,7 @@ const icon = (name) =>
 const nav = [
   ["overview", "总览", "grid"],
   ["devices", "电视设备", "tv"],
+  ["statistics", "跳过统计", "chart"],
   ["rules", "跳过规则", "sliders"],
   ["channels", "频道白名单", "heart"],
   ["logs", "运行日志", "logs"],
@@ -46,6 +48,8 @@ const S = {
   panel: {},
   meta: {},
   status: { state: "waiting", devices: {} },
+  statistics: null,
+  statisticsStale: false,
   page: "overview",
   dirty: false,
   logs: [],
@@ -110,6 +114,7 @@ async function save(config) {
   adopt(await put("/config", { revision: S.revision, config }));
   S.dirty = false;
   S.status = await api("/status");
+  await refreshStatistics();
   render();
   toast("配置已保存并应用");
 }
@@ -211,6 +216,8 @@ async function enter() {
   S.meta = meta;
   S.panel = panel;
   S.status = status;
+  S.statistics = null;
+  await refreshStatistics();
   S.authenticated = true;
   $("#boot").hidden = true;
   $("#auth").hidden = true;
@@ -239,6 +246,7 @@ function render() {
   const pages = {
     overview: overviewPage,
     devices: devicesPage,
+    statistics: statisticsPage,
     rules: rulesPage,
     channels: channelsPage,
     logs: logsPage,
@@ -256,7 +264,7 @@ function overviewPage() {
       button("添加设备", "add-device", "plus", "primary"),
     ) +
     `<section class="hero"><div class="hero-copy"><div class="eyebrow">YOUR SCREEN. YOUR MOMENT.</div><h2>精彩继续，打扰跳过。</h2><p>自动跳过视频中的赞助片段，静音 YouTube 广告。<br>设置一次，让你喜欢的内容自然接续。</p><div class="actions">${button("管理跳过规则", "go-rules", "sliders", "lime")}${button("查看设备", "go-devices", "", "")}</div></div>${tvArt()}</section>
-  <div class="stats"><div class="stat"><div class="stat-label">后台服务 ${icon("shield")}</div><div class="stat-value state-value" id="stat-state"></div><div class="stat-note" id="stat-uptime"></div></div><div class="stat"><div class="stat-label">在线设备 ${icon("tv")}</div><div class="stat-value" id="stat-devices"></div><div class="stat-note">共 ${S.config.devices.length} 台已配置设备</div></div><div class="stat"><div class="stat-label">启用的跳过类别 ${icon("sliders")}</div><div class="stat-value">${S.config.skip_categories.length}<small> / 10</small></div><div class="stat-note">按你的喜好自动跳过</div></div><div class="stat"><div class="stat-label">后端版本 ${icon("check")}</div><div class="stat-value">v${esc(S.meta.upstream.version)}</div><div class="stat-note">固定上游版本，更新可控</div></div></div>
+  <div class="stats"><div class="stat"><div class="stat-label">后台服务 ${icon("shield")}</div><div class="stat-value state-value" id="stat-state"></div><div class="stat-note" id="stat-uptime"></div></div><div class="stat"><div class="stat-label">在线设备 ${icon("tv")}</div><div class="stat-value" id="stat-devices"></div><div class="stat-note">共 ${S.config.devices.length} 台已配置设备</div></div><div class="stat"><div class="stat-label">启用的跳过类别 ${icon("sliders")}</div><div class="stat-value">${S.config.skip_categories.length}<small> / 10</small></div><div class="stat-note">按你的喜好自动跳过</div></div><div class="stat"><div class="stat-label">累计跳过 ${icon("chart")}</div><div class="stat-value" id="stat-skips">0</div><div class="stat-note"><a href="#statistics" data-page="statistics">查看全局与设备明细 →</a></div></div></div>
   <div class="grid-two"><section><div class="section-head"><div><h2>我的电视 <small>(${S.config.devices.length})</small></h2><p>连接状态每 5 秒自动刷新</p></div><button class="quiet" data-action="go-devices">管理设备 →</button></div><div id="device-list"></div><div class="recent"><div class="section-head"><h2>最近动态</h2><button class="quiet" data-action="go-logs">全部日志 →</button></div><div class="card" id="recent-logs"></div></div></section><aside class="card flat"><div class="section-head"><h2>三步，开始观看</h2><span class="badge">快速入门</span></div><div class="steps"><div class="step"><span class="step-num">01</span><div><strong>打开电视上的 YouTube</strong><p>进入「设置」→「使用电视代码关联」，找到 12 位数字配对码。</p></div></div><div class="step"><span class="step-num">02</span><div><strong>在这里添加你的电视</strong><p>输入配对码即可连接，无需 SSH，也不用手动编辑配置文件。</p></div></div><div class="step"><span class="step-num">03</span><div><strong>选择规则，安心观看</strong><p>保存规则后自动生效。容器保持运行即可，管理页面可以关闭。</p></div></div></div><div class="hint spacer-top">片段数据来自 SponsorBlock 社区。没有社区标记的视频不会跳过；原生广告会在允许跳过时自动跳过。</div></aside></div>`
   );
 }
@@ -271,6 +279,26 @@ function devicesPage() {
     `<div id="device-list"></div><div class="hint spacer-top">电视可以与容器位于不同网络，只要容器能够访问 YouTube。局域网搜索需要处于同一网络，Linux Docker 推荐使用 host 网络。配对码方式无需 host 网络。</div>`
   );
 }
+const countText = (value) => Number(value || 0).toLocaleString("zh-CN");
+function statisticsPage() {
+  return heading("跳过统计", "原生广告与 10 类 SponsorBlock 片段，按设备累计。") +
+    '<p id="statistics-error" class="hint warning" role="status" hidden>统计刷新失败；如有已读取的数据，将保留显示。连接恢复后会自动更新。</p><div id="skip-statistics"></div>';
+}
+function statisticsContent() {
+  const data = S.statistics;
+  if (!data) return `<p class="hint">${S.statisticsStale ? "暂时无法读取跳过统计，请稍后重试。" : "正在读取跳过统计…"}</p>`;
+  const categories = data.categories.filter((category) =>
+    category.id !== "unknown" || data.global.counts.unknown > 0,
+  );
+  const breakdown = (counts) => `<dl class="skip-breakdown">${categories.map((category) =>
+    `<div><dt>${esc(category.name)}</dt><dd>${countText(counts[category.id])}<small> 次</small></dd></div>`,
+  ).join("")}</dl>`;
+  const since = new Date(data.since).toLocaleString("zh-CN", { hour12: false });
+  return `<section class="card skip-global"><div class="section-head"><div><h2>全局汇总</h2><p>所有设备的累计跳过次数，包含已移除设备的历史记录</p></div><span class="badge">每 5 秒刷新</span></div><div class="skip-total"><span>累计跳过总次数</span><strong>${countText(data.global.total)}<small> 次</small></strong></div>${breakdown(data.global.counts)}</section>
+    <div class="section-head"><div><h2>单设备统计 <small>(${data.devices.length})</small></h2><p>设备离线或服务暂停后，仍保留累计次数</p></div></div>
+    ${data.devices.length ? `<div class="skip-devices">${data.devices.map((device) => `<article class="card"><div class="section-head"><div class="skip-device-name"><h3>${esc(device.name)}</h3>${device.configured ? "" : '<span class="badge">已移除 · 历史记录</span>'}</div>${icon("tv")}</div><div class="skip-total"><span>该设备跳过总次数</span><strong>${countText(device.total)}<small> 次</small></strong></div>${breakdown(device.counts)}</article>`).join("")}</div>` : `<section class="card">${empty("还没有设备统计", "添加电视后会显示各类别次数，首次跳过前均为 0。", button("添加设备", "add-device", "plus", "primary"))}</section>`}
+    <div class="hint">统计起始时间：${esc(since)}。仅累计本功能启用后的记录，数据随数据卷保存，重启后保留。<br>原生广告按成功发送的跳过指令计数，同一广告的重复通知只计一次；SponsorBlock 按成功跳过的片段计数，合并跳过时各片段分别计入所属类别。总次数为各类别之和，静音不计入。关闭「回报跳过次数」不影响本地统计。</div>`;
+}
 function deviceList() {
   if (!S.config.devices.length)
     return empty(
@@ -281,7 +309,8 @@ function deviceList() {
   return `<div class="device-grid">${S.config.devices
     .map((d, i) => {
       const state = S.status.devices[S.keys[d.screen_id]] || {},
-        connected = state.connected;
+        connected = state.connected,
+        total = S.statistics ? countText(S.statistics.devices.find((device) => device.key === S.keys[d.screen_id])?.total) : "—";
       const label =
         S.status.state === "stopped"
           ? "服务已暂停"
@@ -290,7 +319,7 @@ function deviceList() {
               ? "正在播放"
               : "已连接"
             : "等待电视上线";
-      return `<article class="device"><div class="device-top"><span class="device-icon">${icon("tv")}</span><div class="device-info"><h3>${esc(d.name)}</h3><p>YouTube on TV</p></div><span class="badge ${connected ? "good" : ""}">${label}</span></div><div class="device-body"><span class="muted">${connected && state.video_id ? "当前视频" : "连接状态"}</span><span>${connected && state.video_id ? esc(state.video_id) : connected ? "已连接 YouTube" : "等待电视打开 YouTube"}</span></div><div class="device-bottom"><span>时间偏移 ${d.offset} ms</span><div><button class="quiet" data-action="edit-device" data-index="${i}">编辑</button><button class="quiet" data-action="delete-device" data-index="${i}">移除</button></div></div></article>`;
+      return `<article class="device"><div class="device-top"><span class="device-icon">${icon("tv")}</span><div class="device-info"><h3>${esc(d.name)}</h3><p>YouTube on TV</p></div><span class="badge ${connected ? "good" : ""}">${label}</span></div><div class="device-body"><span class="muted">${connected && state.video_id ? "当前视频" : "连接状态"}</span><span>${connected && state.video_id ? esc(state.video_id) : connected ? "已连接 YouTube" : "等待电视打开 YouTube"}</span></div><div class="device-body"><span class="muted">累计跳过</span><a href="#statistics" data-page="statistics">${total} 次 →</a></div><div class="device-bottom"><span>时间偏移 ${d.offset} ms</span><div><button class="quiet" data-action="edit-device" data-index="${i}">编辑</button><button class="quiet" data-action="delete-device" data-index="${i}">移除</button></div></div></article>`;
     })
     .join("")}</div>`;
 }
@@ -298,7 +327,7 @@ function rulesPage() {
   const c = S.config;
   return (
     heading("跳过规则", "把时间留给真正想看的内容。") +
-    `<form id="rules-form"><section class="card"><div class="section-head"><div><h2>视频片段</h2><p>根据 SponsorBlock 社区标记自动跳过所选类别</p></div><div class="actions"><button class="quiet" type="button" data-action="categories-all">全选</button><button class="quiet" type="button" data-action="categories-none">清空</button></div></div><div class="category-grid">${S.meta.categories.map((cat) => `<label class="category"><input type="checkbox" name="category" value="${cat.id}" ${c.skip_categories.includes(cat.id) ? "checked" : ""}><div><strong>${cat.name}<code>${cat.id}</code></strong><p>${cat.description}</p></div></label>`).join("")}</div><div class="form-grid spacer-top">${field("minimum_skip_length", "最短跳过长度（秒）", c.minimum_skip_length, "仅跳过长于此值的片段；填 0 表示不设最短长度。", "number", 'min="0" max="3600" step="0.1" required')}</div>${switchRow("skip_count_tracking", "回报跳过次数", "向 SponsorBlock 回报跳过的片段 UUID，帮助社区贡献者了解使用情况。", c.skip_count_tracking)}</section><section class="card"><h2>YouTube 广告与播放</h2>${switchRow("mute_ads", "广告自动静音", "在原生广告播放时静音，回到视频内容后恢复音量。", c.mute_ads)}${switchRow("skip_ads", "自动点击「跳过广告」", "在 YouTube 允许跳过广告的第一时间自动点击。", c.skip_ads)}${switchRow("auto_play", "自动播放下一条", "保持 YouTube 的自动播放功能开启。", c.auto_play)}<div class="hint spacer-top">原生广告无法保证完全移除。Shorts 和儿童资料存在上游兼容性限制，使用 AirPlay 外接音响时广告静音可能无效。</div><div class="save-row"><small>保存后自动应用到所有设备</small><button class="btn primary" type="submit">保存并应用</button></div></section></form>`
+    `<form id="rules-form"><section class="card"><div class="section-head"><div><h2>视频片段</h2><p>根据 SponsorBlock 社区标记自动跳过所选类别</p></div><div class="actions"><button class="quiet" type="button" data-action="categories-all">全选</button><button class="quiet" type="button" data-action="categories-none">清空</button></div></div><div class="category-grid">${S.meta.categories.map((cat) => `<label class="category"><input type="checkbox" name="category" value="${cat.id}" ${c.skip_categories.includes(cat.id) ? "checked" : ""}><div><strong>${cat.name}<code>${cat.id}</code></strong><p>${cat.description}</p></div></label>`).join("")}</div><div class="form-grid spacer-top">${field("minimum_skip_length", "最短跳过长度（秒）", c.minimum_skip_length, "仅跳过长于此值的片段；填 0 表示不设最短长度。", "number", 'min="0" max="3600" step="0.1" required')}</div>${switchRow("skip_count_tracking", "回报跳过次数", "向 SponsorBlock 回报跳过的片段 UUID，帮助社区贡献者了解使用情况；关闭不影响本地跳过统计。", c.skip_count_tracking)}</section><section class="card"><h2>YouTube 广告与播放</h2>${switchRow("mute_ads", "广告自动静音", "在原生广告播放时静音，回到视频内容后恢复音量。", c.mute_ads)}${switchRow("skip_ads", "自动点击「跳过广告」", "在 YouTube 允许跳过广告的第一时间自动点击。", c.skip_ads)}${switchRow("auto_play", "自动播放下一条", "保持 YouTube 的自动播放功能开启。", c.auto_play)}<div class="hint spacer-top">原生广告无法保证完全移除。Shorts 和儿童资料存在上游兼容性限制，使用 AirPlay 外接音响时广告静音可能无效。</div><div class="save-row"><small>保存后自动应用到所有设备</small><button class="btn primary" type="submit">保存并应用</button></div></section></form>`
   );
 }
 function channelsPage() {
@@ -326,7 +355,7 @@ function settingsPage() {
     p = S.panel;
   return (
     heading("高级设置", "网络连接、服务管理，以及你的配置备份。") +
-    `<div class="narrow"><form id="advanced-form"><section class="card"><div class="section-head"><h2>连接与接口</h2></div><div class="form-grid">${field("join_name", "电视上显示的连接名称", c.join_name, "作为遥控客户端连接到电视时显示的名称。", "text", 'required maxlength="100"')}${field("sponsorblock_api_url", "SponsorBlock API 地址", c.sponsorblock_api_url, "支持自建兼容服务，默认使用官方 API。", "url", 'required maxlength="2048"')}${field("apikey", "YouTube Data API v3 密钥", c.apikey, "仅频道白名单与频道搜索需要；其他功能无需密钥。", "password", 'maxlength="512" autocomplete="off"')}</div>${switchRow("use_proxy", "通过代理访问网络", "启用后使用下方已保存的代理地址；局域网地址应保持直连。", c.use_proxy)}<div class="save-row"><button class="btn primary" type="submit">保存连接设置</button></div></section></form><form id="panel-form"><section class="card"><h2>代理与诊断</h2><div class="spacer-top">${field("proxy_url", "HTTP(S) 代理地址", p.proxy_url, "例如 http://192.168.1.10:7890；Docker 中的 127.0.0.1 指容器自身。先保存代理，再打开上方代理开关。", "password", 'maxlength="2048" placeholder="http://192.168.1.10:7890" autocomplete="off"')}</div>${switchRow("debug", "详细日志", "记录上游连接与播放事件，仅在排查问题时开启。", p.debug)}${switchRow("http_tracing", "HTTP 请求诊断", "记录请求方法、地址路径与响应状态；省略响应正文及查询参数。", p.http_tracing)}<div class="save-row"><button class="btn primary" type="submit">保存代理与诊断</button></div></section></form><section class="card"><div class="section-head"><h2>后台服务</h2><span id="service-state"></span></div><p class="subline">暂停后将停止所有电视上的自动操作，管理面板仍可访问。暂停状态会在容器重启后保留。</p><div class="actions spacer-top">${button("启动服务", "service-start", "play")}${button("重新启动", "service-restart", "refresh")}${button("暂停服务", "service-stop", "", "danger")}</div></section><section class="card"><h2>备份与恢复</h2><p class="subline spacer-top">导出配置兼容原版 iSponsorBlockTV，包含电视凭据及 YouTube API 密钥，请妥善保管。代理、诊断设置和管理密码保存在数据卷中，不包含在此配置文件内。</p><div class="actions spacer-top"><a class="btn" href="/api/config/export">${icon("download")}导出配置</a>${button("导入配置", "import-config", "", "")}</div></section><section class="card"><div class="section-head"><h2>访问安全</h2>${button("修改管理密码", "change-password")}</div><p class="subline">修改密码会使其他已登录会话失效。需要远程访问时，建议通过 HTTPS 反向代理或 VPN 连接。</p></section><section class="card"><h2>关于此项目</h2><div class="version-box spacer-top"><span>管理面板 <strong>v${esc(S.meta.version)}</strong></span><span>上游后端 <strong>v${esc(S.meta.upstream.version)}</strong></span><span>提交 <code>${esc(S.meta.upstream.commit.slice(0, 12))}</code></span></div><p class="subline spacer-top">基于 <a href="https://github.com/dmunozv04/iSponsorBlockTV" target="_blank" rel="noopener noreferrer">iSponsorBlockTV</a> · GPL-3.0。镜像不会在后台自动升级，更新后重新拉取镜像即可。</p><div class="actions spacer-top"><a class="btn sm" href="https://github.com/dongbo501/isponsorblocktv-web#readme" target="_blank" rel="noopener noreferrer">使用教程 ↗</a><a class="btn sm" href="/api/openapi.json" target="_blank" rel="noopener noreferrer">API 文档 ↗</a><button class="btn sm" data-action="logout">退出登录</button></div></section></div>`
+    `<div class="narrow"><form id="advanced-form"><section class="card"><div class="section-head"><h2>连接与接口</h2></div><div class="form-grid">${field("join_name", "电视上显示的连接名称", c.join_name, "作为遥控客户端连接到电视时显示的名称。", "text", 'required maxlength="100"')}${field("sponsorblock_api_url", "SponsorBlock API 地址", c.sponsorblock_api_url, "支持自建兼容服务，默认使用官方 API。", "url", 'required maxlength="2048"')}${field("apikey", "YouTube Data API v3 密钥", c.apikey, "仅频道白名单与频道搜索需要；其他功能无需密钥。", "password", 'maxlength="512" autocomplete="off"')}</div>${switchRow("use_proxy", "通过代理访问网络", "启用后使用下方已保存的代理地址；局域网地址应保持直连。", c.use_proxy)}<div class="save-row"><button class="btn primary" type="submit">保存连接设置</button></div></section></form><form id="panel-form"><section class="card"><h2>代理与诊断</h2><div class="spacer-top">${field("proxy_url", "HTTP(S) 代理地址", p.proxy_url, "例如 http://192.168.1.10:7890；Docker 中的 127.0.0.1 指容器自身。先保存代理，再打开上方代理开关。", "password", 'maxlength="2048" placeholder="http://192.168.1.10:7890" autocomplete="off"')}</div>${switchRow("debug", "详细日志", "记录上游连接与播放事件，仅在排查问题时开启。", p.debug)}${switchRow("http_tracing", "HTTP 请求诊断", "记录请求方法、地址路径与响应状态；省略响应正文及查询参数。", p.http_tracing)}<div class="save-row"><button class="btn primary" type="submit">保存代理与诊断</button></div></section></form><section class="card"><div class="section-head"><h2>后台服务</h2><span id="service-state"></span></div><p class="subline">暂停后将停止所有电视上的自动操作，管理面板仍可访问。暂停状态会在容器重启后保留。</p><div class="actions spacer-top">${button("启动服务", "service-start", "play")}${button("重新启动", "service-restart", "refresh")}${button("暂停服务", "service-stop", "", "danger")}</div></section><section class="card"><h2>备份与恢复</h2><p class="subline spacer-top">导出配置兼容原版 iSponsorBlockTV，包含电视凭据及 YouTube API 密钥，请妥善保管。跳过统计、代理、诊断设置和管理密码保存在数据卷中，不包含在此配置文件内。</p><div class="actions spacer-top"><a class="btn" href="/api/config/export">${icon("download")}导出配置</a>${button("导入配置", "import-config", "", "")}</div></section><section class="card"><div class="section-head"><h2>访问安全</h2>${button("修改管理密码", "change-password")}</div><p class="subline">修改密码会使其他已登录会话失效。需要远程访问时，建议通过 HTTPS 反向代理或 VPN 连接。</p></section><section class="card"><h2>关于此项目</h2><div class="version-box spacer-top"><span>管理面板 <strong>v${esc(S.meta.version)}</strong></span><span>上游后端 <strong>v${esc(S.meta.upstream.version)}</strong></span><span>提交 <code>${esc(S.meta.upstream.commit.slice(0, 12))}</code></span></div><p class="subline spacer-top">基于 <a href="https://github.com/dmunozv04/iSponsorBlockTV" target="_blank" rel="noopener noreferrer">iSponsorBlockTV</a> · GPL-3.0。镜像不会在后台自动升级，更新后重新拉取镜像即可。</p><div class="actions spacer-top"><a class="btn sm" href="https://github.com/dongbo501/isponsorblocktv-web#readme" target="_blank" rel="noopener noreferrer">使用教程 ↗</a><a class="btn sm" href="/api/openapi.json" target="_blank" rel="noopener noreferrer">API 文档 ↗</a><button class="btn sm" data-action="logout">退出登录</button></div></section></div>`
   );
 }
 function updateLive() {
@@ -350,6 +379,12 @@ function updateLive() {
     ).length;
   }
   if ($("#device-list")) $("#device-list").innerHTML = deviceList();
+  if ($("#stat-skips")) $("#stat-skips").textContent = S.statistics ? countText(S.statistics.global.total) : "—";
+  if ($("#skip-statistics")) {
+    const content = statisticsContent();
+    if ($("#skip-statistics").innerHTML !== content) $("#skip-statistics").innerHTML = content;
+    $("#statistics-error").hidden = !S.statisticsStale;
+  }
   if ($("#service-state")) $("#service-state").innerHTML = badge();
   renderLogs();
 }
@@ -385,11 +420,20 @@ function renderLogs() {
     $("#log-live").className = S.paused ? "badge" : "badge good";
   }
 }
+async function refreshStatistics() {
+  try {
+    S.statistics = await api("/statistics");
+    S.statisticsStale = false;
+  } catch {
+    S.statisticsStale = true;
+  }
+}
 async function refresh() {
   if (!S.authenticated || polling || document.hidden) return;
   polling = true;
   try {
-    S.status = await api("/status");
+    const [status] = await Promise.all([api("/status"), refreshStatistics()]);
+    S.status = status;
     if (["overview", "logs"].includes(S.page) && !S.paused) {
       const after = S.logs.at(-1)?.id || 0;
       let data = await api(`/logs?after=${after}`);
@@ -402,6 +446,8 @@ async function refresh() {
     updateLive();
   } catch (error) {
     if (S.authenticated) {
+      S.statisticsStale = true;
+      if ($("#statistics-error")) $("#statistics-error").hidden = false;
       $("#top-status").textContent = "面板连接中断";
       $("#top-status").className = "badge bad";
     }
@@ -634,6 +680,8 @@ async function logout() {
   S.config = null;
   S.panel = {};
   S.logs = [];
+  S.statistics = null;
+  S.statisticsStale = false;
   S.dirty = false;
   await showAuth();
 }

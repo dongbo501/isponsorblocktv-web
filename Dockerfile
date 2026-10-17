@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM python:3.13-slim-bookworm
-ARG VERSION=1.0.0
+ARG VERSION=1.1.0
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="iSponsorBlockTV Web" \
       org.opencontainers.image.description="iSponsorBlockTV with a complete Chinese web administration panel" \

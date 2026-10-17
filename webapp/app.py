@@ -191,6 +191,11 @@ def create_app(data_dir=None, supervisor_factory=Supervisor):
     async def status():
         return app.state.supervisor.status()
 
+    @api.get("/statistics", tags=["统计"])
+    async def statistics():
+        store = app.state.store
+        return store.statistics.snapshot(store.config)
+
     @api.post("/service", tags=["服务"])
     async def service(body: ServiceAction):
         async with app.state.lock:

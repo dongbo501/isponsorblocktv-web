@@ -457,6 +457,79 @@ small,
   font-size: 10px;
   color: #9aa39b;
 }
+.skip-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 15px 0 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.skip-total strong {
+  color: var(--ink);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.skip-total small, .skip-breakdown small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.skip-global .skip-total {
+  border-radius: 10px;
+  background: #edf6e8;
+  padding: 18px 20px;
+  margin-bottom: 10px;
+}
+.skip-global .skip-total strong {
+  font-size: 38px;
+  color: #345931;
+}
+.skip-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 22px;
+  margin: 0;
+}
+.skip-breakdown > div {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.skip-breakdown dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.skip-breakdown dd {
+  margin: 5px 0 0;
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.skip-global .skip-breakdown {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.skip-devices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.skip-devices .card {
+  min-width: 0;
+  margin: 0;
+}
+.skip-device-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.skip-device-name .badge {
+  margin-top: 8px;
+}
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -1177,6 +1250,9 @@ dialog::backdrop {
   }
 }
 @media (max-width: 760px) {
+  .skip-global .skip-breakdown {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .sidebar {
     position: relative;
     width: 100%;

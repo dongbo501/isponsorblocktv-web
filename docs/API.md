@@ -21,6 +21,7 @@ API 与网页使用同一个容器、同一个端口，路径前缀 `/api`。登
 | GET | `/healthz` | 无需登录，仅返回管理服务存活和后台状态 |
 | GET | `/api/meta` | 面板/上游版本、提交及中文分类说明 |
 | GET | `/api/status` | 后台进程状态、运行秒数、退出码、重试次数、各设备实际状态 |
+| GET | `/api/statistics` | 全局及每个设备的各类别跳过次数与总次数，需登录 |
 | POST | `/api/service` | `{"action":"start"}` / `stop` / `restart` |
 | GET | `/api/config` | 返回 `config`、`revision` 及设备状态索引 `device_keys` |
 | PUT | `/api/config` | `{"revision":"当前版本值","config":{完整配置}}`，保存后自动应用 |
@@ -37,13 +38,28 @@ API 与网页使用同一个容器、同一个端口，路径前缀 `/api`。登
 
 `GET /api/config`、`GET /api/panel` 和导出接口包含管理所需的凭据，仅供已认证管理员使用。不要把响应贴到公开 issue。
 
+## 跳过统计
+
+`GET /api/statistics` 返回：
+
+- `since`：此数据卷首次启用统计的 UTC 时间，ISO 8601 格式。
+- `categories`：统计类别的 `id` 和中文 `name`，包含 `youtube_ad`、10 个 SponsorBlock 类别和兜底类别 `unknown`。
+- `global`：`counts` 为类别 ID 到非负整数次数的映射，`total` 为所有类别次数之和。
+- `devices`：每项含 `key`、`name`、`configured`、`counts` 和 `total`。`key` 与配置接口的 `device_keys` 一致；不会返回 Screen ID。`configured: false` 表示已移除的历史设备，其次数仍参与全局汇总。
+
+所有类别始终返回，没有记录时为 0；已配置设备即使尚未跳过也返回零计数。每个类别的全局值等于所有设备该类别之和，全局总次数等于所有设备总次数之和。统计不会因为设备离线、服务暂停、配置导入或重启而清空，设备改名沿用记录，相同 Screen ID 重新添加沿用记录。
+
+原生广告按成功发送的跳过指令计数，同一广告的重复通知只计一次；SponsorBlock 按成功跳转涉及的片段 UUID 计数，合并片段各计一次，同一次跳过中的重复 UUID 去重。没有类别或不识别的类别计入 `unknown`。接口成功不代表独立确认了电视播放结果；仅静音、失败或取消的指令不计入。`skip_count_tracking` 仅控制向社区回报，不控制本地统计。
+
+统计持久化到 `statistics.json`，不包含在原版兼容的配置导出中；从功能启用后累计，不从旧日志补算。面板每 5 秒读取此接口。此版本不提供修改或清零统计的 API。
+
 ## 配置字段
 
 | 字段 | 类型 / 默认值 | 说明 |
 |---|---|---|
 | `devices` | 数组 / `[]` | 每项 `screen_id`、`name`、`offset`；offset 单位毫秒，范围 -60000～60000 |
 | `skip_categories` | 数组 / `["sponsor"]` | 允许 10 个上游分类，空数组表示关闭片段跳过 |
-| `skip_count_tracking` | bool / true | 回报片段 UUID 的跳过次数 |
+| `skip_count_tracking` | bool / true | 向 SponsorBlock 回报片段 UUID 的跳过次数，不影响本地统计 |
 | `mute_ads` | bool / true | 原生广告静音 |
 | `skip_ads` | bool / true | 自动点击可用的跳过广告按钮 |
 | `minimum_skip_length` | number / 1 | 0～3600 秒，仅跳过长于此值的片段 |

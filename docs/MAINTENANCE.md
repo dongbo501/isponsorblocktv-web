@@ -16,7 +16,7 @@
 
 容器由 tini 回收子进程；单个 Uvicorn worker 管理全部设备。后台退出后带退避自动重试，最长间隔 60 秒。停止操作有超时与强制终止兜底。配置与会话服务不会因某台电视离线而退出。
 
-上游源码保持原样；`webapp/worker.py` 负责生命周期与只读状态采集，`webapp/backend.py` 负责网络请求适配。上游重试逻辑可能吞掉取消异常，所以 worker 与父进程都限制关闭等待时间。
+上游源码保持原样；`webapp/worker.py` 负责生命周期与状态/跳过事件采集，`webapp/backend.py` 负责网络请求适配。`webapp/tracking.py` 通过继承保留片段类别，在 seek/skip 指令返回成功后发送结构化 `@SKIP` 事件，并对原生广告的重复通知去重；不会从普通日志推断次数，也不依赖社区次数回报开关。`webapp/statistics.py` 定义统计模型与汇总，父进程校验事件后原子写入 `statistics.json`。上游重试逻辑可能吞掉取消异常，所以 worker 与父进程都限制关闭等待时间。
 
 ## 更新固定的上游源码
 
@@ -38,6 +38,7 @@ git diff upstream.json vendor/requirements.txt
 - `webapp/models.py` 的字段、校验与中文类别。
 - `webapp/static/app.js` 的设置表单与说明。
 - `webapp/worker.py` 的 listener/session 兼容接口与状态读取。
+- `webapp/tracking.py` 的片段合并元数据、命令布尔返回值和原生广告事件边界；同步运行 `tests/test_tracking.py`。
 - `webapp/backend.py` 的配对、发现与频道查询调用。
 - 对应测试与 README/API 文档。
 
@@ -59,6 +60,8 @@ docker build -t isponsorblocktv-web:check .
 ```
 
 另外验证：空数据卷首次启动、设置/登录、保存空分类、电视配对错误提示、配置导入导出、容器重建后的持久化、后台停止/重启，以及桌面和移动端页面。真实电视验收需检查 DIAL/Chromecast 搜索、播放片段跳过、原生广告静音和跳过、代理环境与白名单。没有真实设备时，明确记录这一限制，不把模拟测试描述为实机通过。
+
+统计验收还需覆盖原生广告连续播放与重复通知、全部 10 类片段、合并片段、失败/取消指令、全局与设备总数一致、关闭社区回报后仍累计、设备改名/移除后的历史保留。原生广告的去重依赖广告 ID 与返回内容的播放事件；电视未提供广告 ID 或漏发边界事件时无法保证逐条识别连续广告，需随上游事件格式变化验证。
 
 ## GitHub / GHCR
 

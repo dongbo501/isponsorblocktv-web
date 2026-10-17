@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -10,9 +9,7 @@ from collections import deque
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
-
-def device_key(screen_id):
-    return hashlib.sha256(screen_id.encode()).hexdigest()[:16]
+from .statistics import SkipEvent, device_key
 
 
 def redact(text, config, panel):
@@ -116,6 +113,7 @@ class Supervisor:
         self.log("后台服务已启动，正在连接已配置的电视")
 
     async def read_output(self, process, config, panel):
+        devices = {device_key(device.screen_id): device.name for device in config.devices}
         while line := await process.stdout.readline():
             text = line.decode("utf-8", errors="replace").strip()
             if text.startswith("@STATUS "):
@@ -123,6 +121,16 @@ class Supervisor:
                     self.devices = json.loads(text[8:])
                 except (ValueError, TypeError):
                     pass
+            elif text.startswith("@SKIP "):
+                try:
+                    event = SkipEvent.model_validate_json(text[6:])
+                    if event.device_key not in devices or not any(event.counts.values()):
+                        raise ValueError("Invalid skip event")
+                    self.store.record_skip(event, devices[event.device_key])
+                except (ValueError, TypeError):
+                    self.log("忽略无效的跳过统计事件", "WARNING")
+                except OSError:
+                    self.log("跳过统计保存失败，请检查数据卷空间与写入权限", "ERROR")
             elif text:
                 level = (
                     "ERROR"

@@ -12,9 +12,12 @@ import aiohttp
 from . import backend  # noqa: F401 (register the pinned upstream module path)
 from .models import PanelSettings
 from .supervisor import device_key
-from iSponsorBlockTV.api_helpers import ApiHelper
+from .tracking import TrackingApiHelper, TrackingDeviceListener
 from iSponsorBlockTV.helpers import Config
-from iSponsorBlockTV.main import DeviceListener
+
+
+def report_skip(key, counts):
+    print("@SKIP " + json.dumps({"device_key": key, "counts": counts}), flush=True)
 
 
 async def run():
@@ -53,10 +56,14 @@ async def run():
         trust_env=False, trace_configs=traces, connector=aiohttp.TCPConnector(ttl_dns_cache=300)
     ) as raw_session:
         session = backend.RoutedSession(raw_session, config, panel)
-        helper = ApiHelper(config, session)
+        helper = TrackingApiHelper(config, session)
         devices, tasks = [], []
         for device in config.devices:
-            listener = DeviceListener(helper, config, device, panel.debug, session)
+            key = device_key(device.screen_id)
+            listener = TrackingDeviceListener(
+                helper, config, device, panel.debug, session,
+                record_skip=lambda counts, key=key: report_skip(key, counts),
+            )
             await listener.initialize_web_session()
             devices.append((device, listener))
             tasks += [asyncio.create_task(listener.loop()), asyncio.create_task(listener.refresh_auth_loop())]

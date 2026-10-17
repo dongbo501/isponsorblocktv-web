@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from .models import BackendConfig, PanelSettings
+from .statistics import Statistics, device_key
 
 
 def atomic_json(path: Path, value):
@@ -47,14 +48,43 @@ class Store:
         self.enabled = (
             json.loads(self.service_path.read_text())["enabled"] if self.service_path.exists() else True
         )
+        self.statistics_path = directory / "statistics.json"
+        self.statistics = (
+            Statistics.model_validate_json(self.statistics_path.read_text())
+            if self.statistics_path.exists()
+            else Statistics()
+        )
+        if not self.statistics_path.exists():
+            atomic_json(self.statistics_path, self.statistics.model_dump(mode="json"))
 
     @property
     def revision(self):
         return hashlib.sha256(self.config.model_dump_json().encode()).hexdigest()[:20]
 
     def save(self, config):
+        # Keep the latest display names even after a device is later removed.
+        statistics = self.statistics.model_copy(deep=True)
+        for device in config.devices:
+            saved = statistics.devices.get(device_key(device.screen_id))
+            if saved:
+                saved.name = device.name
+        if statistics != self.statistics:
+            self.save_statistics(statistics)
         atomic_json(self.config_path, config.model_dump())
         self.config = config
+
+    def save_statistics(self, statistics):
+        atomic_json(self.statistics_path, statistics.model_dump(mode="json"))
+        self.statistics = statistics
+
+    def record_skip(self, event, name):
+        name = next(
+            (device.name for device in self.config.devices if device_key(device.screen_id) == event.device_key),
+            name,
+        )
+        statistics = self.statistics.model_copy(deep=True)
+        statistics.record(event, name)
+        self.save_statistics(statistics)
 
     def save_panel(self, panel):
         atomic_json(self.panel_path, panel.model_dump())

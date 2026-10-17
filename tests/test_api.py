@@ -12,6 +12,7 @@ def test_auth_protects_all_secrets_and_actions(client):
         "/config",
         "/panel",
         "/status",
+        "/statistics",
         "/logs",
         "/config/export",
         "/logs/export",
